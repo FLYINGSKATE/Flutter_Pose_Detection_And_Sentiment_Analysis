@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:sentiment_dart/sentiment_dart.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:speech_to_text/speech_to_text.dart';
 
 void main() {
   runApp(MyApp());
@@ -46,7 +50,47 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  String _counter = "Null";
+  final sentiment = Sentiment();
+  SpeechToText _speechToText = SpeechToText();
+  bool _speechEnabled = false;
+  String _lastWords = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _initSpeech();
+  }
+
+  /// This has to happen only once per app
+  void _initSpeech() async {
+    _speechEnabled = await _speechToText.initialize();
+    setState(() {});
+  }
+
+  /// Each time to start a speech recognition session
+  void _startListening() async {
+    await _speechToText.listen(onResult: _onSpeechResult);
+    setState(() {});
+  }
+
+  /// Manually stop the active speech recognition session
+  /// Note that there are also timeouts that each platform enforces
+  /// and the SpeechToText plugin supports setting timeouts on the
+  /// listen method.
+  void _stopListening() async {
+    await _speechToText.stop();
+    setState(() {});
+  }
+
+  /// This is the callback that the SpeechToText plugin calls when
+  /// the platform returns recognized words.
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    setState(() {
+      _lastWords = result.recognizedWords;
+      _counter = (sentiment.analysis(_lastWords)).toString();
+    });
+  }
 
   void _incrementCounter() {
     setState(() {
@@ -55,7 +99,12 @@ class _MyHomePageState extends State<MyHomePage> {
       // so that the display can reflect the updated values. If we changed
       // _counter without calling setState(), then the build method would not be
       // called again, and so nothing would appear to happen.
-      _counter++;
+      if(_speechToText.isNotListening){
+        _startListening();
+      }
+      else{
+        _stopListening();
+      }
     });
   }
 
@@ -94,8 +143,17 @@ class _MyHomePageState extends State<MyHomePage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             Text(
-              'You have pushed the button this many times:',
-            ),
+                  // If listening is active show the recognized words
+                  _speechToText.isListening
+                      ? '$_lastWords'
+                  // If listening isn't active but could be tell the user
+                  // how to start it, otherwise indicate that speech
+                  // recognition is not yet ready or not supported on
+                  // the target device
+                      : _speechEnabled
+                      ? 'Tap the microphone to start listening...'
+                      : 'Speech not available',
+                ),
             Text(
               '$_counter',
               style: Theme.of(context).textTheme.headline4,
@@ -105,8 +163,8 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
+        tooltip: 'Analysis',
+        child: Icon(Icons.mic),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
